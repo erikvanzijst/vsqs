@@ -27,7 +27,7 @@ setup(
         'Topic :: System :: Filesystems',
     ],
     description="A very simple message queuing system inspired on Amazon's SQS.",
-    download_url='https://github.com/erikvanzijst/vsqs/archive/master.tar.gz',
+    download_url='https://github.com/erikvanzijst/vsqs/archive/0.3.tar.gz',
     install_requires=['watchdog>=0.8.2'],
     keywords='mq broker message queue',
     license='MIT',
@@ -36,5 +36,5 @@ setup(
     packages=['vsqs'],
     scripts=['scripts/vsqspump', 'scripts/vsqssink'],
     url='https://github.com/erikvanzijst/vsqs',
-    version='0.2',
+    version='0.3',
 )
