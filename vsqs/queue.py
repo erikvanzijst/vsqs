@@ -132,7 +132,7 @@ class Queue(object):
                 # non vsqs files are ignored
                 pass
 
-    def delete(self, id):
+    def delete(self, m_id):
         map(os.unlink,
             (os.path.join(self.path, fn) for fn in os.listdir(self.path)
-             if fn == str(id) or fn.startswith(str(id) + '.')))
+             if fn == str(m_id) or fn.startswith(str(m_id) + '.')))
