@@ -60,6 +60,7 @@ class Queue(object):
                 try:
                     if any(_fn.startswith(m_id) and _fn != '%s.new' % m_id
                            for _fn in os.listdir(self.path)):
+                        os.unlink(self.fn(m_id, 'new'))
                         continue
                     else:
                         os.write(fd, string)
