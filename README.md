@@ -46,8 +46,8 @@ Ready
 
 Files without extension are ready for consumption. Queues are FIFO and so to
 consume a message a client performs a directory listing, orders the file names
-numerically ("9" comes before "10"), ignores all files that have extensions and
-selects the oldest message.
+numerically ("99" comes before "100"), ignores all files that have extensions
+and selects the oldest message.
 
 To consume the message, the client then renames the file by adding the
 expiration time as extension to the file (e.g. `1415776871123.1415776879654`).
