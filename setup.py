@@ -25,6 +25,7 @@ setup(
     ],
     description="A very simple message queuing system inspired on Amazon's SQS.",
     download_url='https://github.com/erikvanzijst/vsqs/archive/master.tar.gz',
+    install_requires=['watchdog>=0.8.2'],
     keywords='mq broker message queue',
     license='MIT',
     long_description=long_description(),
