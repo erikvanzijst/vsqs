@@ -88,11 +88,12 @@ class Queue(object):
             with self.cond:
                 m = self._get_oldest_message(
                     visibility_timeout=visibility_timeout)
-                if m is None:
+                if m == (None, None):
                     self.cond.wait(None if timeout is None else
                                    remaining() / 1000.0)
                 else:
                     return m
+        return None, None
 
     def _get_oldest_message(self, visibility_timeout=10):
         """Returns a tuple containing the message id and its payload."""
@@ -120,6 +121,7 @@ class Queue(object):
                     # ENOENT is fine, it indicates someone else got there first
                     if e.errno != errno.ENOENT:
                         raise
+        return None, None
 
     def _list_messages(self):
         """Generator yielding (message_id, expiration) tuples containing the
