@@ -32,10 +32,19 @@ class DirectoryWatcher(FileSystemEventHandler):
 
 class Queue(object):
     def __init__(self, manager, path):
-        self.manager = manager
-        if not os.path.exists(path):
+        try:
             os.makedirs(path)
+        except OSError, e:
+            if e.errno != errno.EEXIST:
+                raise
+        self.manager = manager
         self.path = path
+        self.cond = threading.Condition()
+        self.watch = self.manager.observer.schedule(
+            DirectoryWatcher(self.cond), self.path)
+
+    def close(self):
+        self.manager.observer.unschedule(self.watch)
 
     def fn(self, m_id, extension=None):
         base = os.path.join(self.path, m_id)
@@ -74,22 +83,16 @@ class Queue(object):
     def receive(self, visibility_timeout=10, timeout=None):
         now = millis()
         remaining = lambda: (now + timeout * 1000) - millis()
-        cond = threading.Condition()
 
-        with cond:
-            watch = self.manager.observer.schedule(DirectoryWatcher(cond),
-                                                   self.path)
-            try:
-                while timeout is None or remaining() > 0:
-                    m = self._get_oldest_message(
-                        visibility_timeout=visibility_timeout)
-                    if m is None:
-                        cond.wait(None if timeout is None else
-                                  remaining() / 1000.0)
-                    else:
-                        return m
-            finally:
-                self.manager.observer.unschedule(watch)
+        while timeout is None or remaining() > 0:
+            with self.cond:
+                m = self._get_oldest_message(
+                    visibility_timeout=visibility_timeout)
+                if m is None:
+                    self.cond.wait(None if timeout is None else
+                                   remaining() / 1000.0)
+                else:
+                    return m
 
     def _get_oldest_message(self, visibility_timeout=10):
         """Returns a tuple containing the message id and its payload."""
