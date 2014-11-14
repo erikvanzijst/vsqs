@@ -1,5 +1,6 @@
+=================================
 VSQS: Very Simple Queueing System
-===================================
+=================================
 
 VSQS is a message queuing system that is inspired on Amazon's SQS API, uses
 the file system as persistent storage and does not require active broker
@@ -28,9 +29,9 @@ New
 ---
 
 When a new message is published a new file is created whose name is the current
-unix timestamp with the extension `.new` (e.g. `1415776871123.new`).
+unix timestamp with the extension ``.new`` (e.g. ``1415776871123.new``).
 
-Files are created atomically: `open(fn, O_CREAT|O_EXCL|O_WRONLY)`
+Files are created atomically: ``open(fn, O_CREAT|O_EXCL|O_WRONLY)``
 
 If creation fails because a concurrent process just wrote a message at the
 exact same time, the publisher enters a retry loop, updating the file name with
@@ -57,7 +58,7 @@ numerically ("99" comes before "100"), ignores all files that have extensions
 and selects the oldest message.
 
 To consume the message, the client then renames the file by adding the
-expiration time as extension to the file (e.g. `1415776871123.1415776879654`).
+expiration time as extension to the file (e.g. ``1415776871123.1415776879654``).
 
 The expiration file is calculated by adding the visibility timeout to the
 current time and expressing it as another unix timestamp with millisecond
@@ -99,7 +100,7 @@ After performing a directory listing, but before dequeuing the next message
 from the queue, a consumer looks for message files that have a visibility
 timeout extension that lies in the past (indicating expiration). For each one
 found, the client then requeues it by simple dropping the extension from the
-file name (implemented as an atomic rename operation). `ENOENT` failures
+file name (implemented as an atomic rename operation). ``ENOENT`` failures
 indicate a race and can safely be ignored.
 
 After requeuing vsqs loops back, does a new directory listing and starts over.
