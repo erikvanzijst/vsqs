@@ -49,7 +49,8 @@ class QueueTest(TestCase):
         q = self.manager.get_queue('foo')
         m_id = q.publish('foo')
         q.delete(m_id)
-        self.assertIsNone(q.receive(visibility_timeout=10, timeout=0.1))
+        self.assertEqual((None, None),
+                         q.receive(visibility_timeout=10, timeout=0.1))
 
     def test_requeue(self):
         queue.millis = lambda: 0

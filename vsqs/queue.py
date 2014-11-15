@@ -2,10 +2,12 @@ import errno
 import os
 import threading
 import time
+from collections import OrderedDict
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 millis = lambda: int(time.time() * 1000)
+MAX_CACHE_SIZE = 256
 
 
 class QueueManager(object):
@@ -39,26 +41,32 @@ class Queue(object):
                 raise
         self.manager = manager
         self.path = path
-        self.cond = threading.Condition()
-        self.watch = self.manager.observer.schedule(
-            DirectoryWatcher(self.cond), self.path)
+        self._cond = threading.Condition()
+        self._watch = manager.observer.schedule(
+            DirectoryWatcher(self._cond), self.path)
+        self._mid_cache = OrderedDict()
 
     def close(self):
-        self.manager.observer.unschedule(self.watch)
+        self.manager.observer.unschedule(self._watch)
 
-    def fn(self, m_id, extension=None):
+    def _fn(self, m_id, extension=None):
         base = os.path.join(self.path, m_id)
         if extension:
             return base + '.' + extension
         else:
             return base
 
+    def _cache(self, mid, fn):
+        self._mid_cache[mid] = fn
+        if len(self._mid_cache) > MAX_CACHE_SIZE:
+            self._mid_cache.popitem(last=False)
+
     def publish(self, string):
-        """Returns the message that can be used to delete the message."""
+        """Returns the message id that can be used to delete the message."""
         while True:
             m_id = str(millis())
             try:
-                fd = os.open(self.fn(m_id, 'new'),
+                fd = os.open(self._fn(m_id, 'new'),
                              os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             except OSError, e:
                 if e.errno == errno.EEXIST:
@@ -69,13 +77,14 @@ class Queue(object):
                 try:
                     if any(_fn.startswith(m_id) and _fn != '%s.new' % m_id
                            for _fn in os.listdir(self.path)):
-                        os.unlink(self.fn(m_id, 'new'))
+                        os.unlink(self._fn(m_id, 'new'))
                         continue
                     else:
                         os.write(fd, string)
                         os.fsync(fd)
-                        os.rename(self.fn(m_id, 'new'),
-                                  self.fn(m_id))
+                        os.rename(self._fn(m_id, 'new'),
+                                  self._fn(m_id))
+                        self._cache(m_id, self._fn(m_id))
                         return m_id
                 finally:
                     os.close(fd)
@@ -85,11 +94,11 @@ class Queue(object):
         remaining = lambda: (now + timeout * 1000) - millis()
 
         while timeout is None or remaining() > 0:
-            with self.cond:
+            with self._cond:
                 m = self._get_oldest_message(
                     visibility_timeout=visibility_timeout)
                 if m == (None, None):
-                    self.cond.wait(None if timeout is None else
+                    self._cond.wait(None if timeout is None else
                                    remaining() / 1000.0)
                 else:
                     return m
@@ -104,19 +113,21 @@ class Queue(object):
             if len(m) == 1:
                 # attempt to consume this message
                 try:
-                    os.rename(self.fn(m_id), self.fn(m_id, str(expiration)))
+                    os.rename(self._fn(m_id), self._fn(m_id, str(expiration)))
                 except OSError, e:
                     # ENOENT means someone else got here first, just move to
                     # the next file
                     if e.errno != errno.ENOENT:
                         raise e
                 else:
-                    with open(self.fn(m_id, str(expiration))) as f:
+                    fn = self._fn(m_id, str(expiration))
+                    self._cache(m_id, fn)
+                    with open(fn) as f:
                         return m_id, f.read()
             elif m[1] <= now:
                 # re-queue stale consumed message
                 try:
-                    os.rename(self.fn(m_id, str(m[1])), self.fn(m_id))
+                    os.rename(self._fn(m_id, str(m[1])), self._fn(m_id))
                 except OSError, e:
                     # ENOENT is fine, it indicates someone else got there first
                     if e.errno != errno.ENOENT:
@@ -139,6 +150,14 @@ class Queue(object):
                 pass
 
     def delete(self, m_id):
+        try:
+            os.unlink(self._mid_cache.pop(m_id))
+            return
+        except KeyError:
+            pass
+        except OSError, e:
+            if e.errno != errno.ENOENT:
+                raise
         map(os.unlink,
             (os.path.join(self.path, fn) for fn in os.listdir(self.path)
              if fn == str(m_id) or fn.startswith(str(m_id) + '.')))
