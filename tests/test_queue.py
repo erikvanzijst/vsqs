@@ -78,3 +78,15 @@ class QueueTest(TestCase):
         t.start()
         self.assertEqual(('0', 'foo'), q.receive(visibility_timeout=1))
         t.join()
+
+    def test_size(self):
+        q = self.manager.get_queue('foo')
+        self.assertEqual(0, q.size())
+        q.publish('foo')
+        self.assertEqual(1, q.size())
+        q.publish('foo')
+        self.assertEqual(2, q.size())
+        m_id, data = q.receive(visibility_timeout=10)
+        self.assertEqual(2, q.size())
+        q.delete(m_id)
+        self.assertEqual(1, q.size())

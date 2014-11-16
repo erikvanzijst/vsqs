@@ -61,6 +61,12 @@ class Queue(object):
         if len(self._mid_cache) > MAX_CACHE_SIZE:
             self._mid_cache.popitem(last=False)
 
+    def size(self):
+        """Returns the number of messages currently in the queue. Not that this
+        includes message that are being consumed, but have not yet been deleted.
+        """
+        return sum(1 for m in self._list_messages())
+
     def publish(self, string):
         """Returns the message id that can be used to delete the message."""
         while True:
