@@ -62,8 +62,9 @@ class Queue(object):
             self._mid_cache.popitem(last=False)
 
     def size(self):
-        """Returns the number of messages currently in the queue. Not that this
-        includes message that are being consumed, but have not yet been deleted.
+        """Returns the number of messages currently in the queue. Note that this
+        includes messages that are being consumed, but have not yet been
+        deleted.
         """
         return sum(1 for m in self._list_messages())
 
