@@ -36,7 +36,7 @@ class Queue(object):
     def __init__(self, manager, path):
         try:
             os.makedirs(path)
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.EEXIST:
                 raise
         self.manager = manager
@@ -67,14 +67,14 @@ class Queue(object):
         """
         return sum(1 for m in self._list_messages())
 
-    def publish(self, string):
+    def publish(self, data):
         """Returns the message id that can be used to delete the message."""
         while True:
             m_id = str(millis())
             try:
                 fd = os.open(self._fn(m_id, 'new'),
                              os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except OSError, e:
+            except OSError as e:
                 if e.errno == errno.EEXIST:
                     time.sleep(0.001)
                     continue
@@ -86,7 +86,7 @@ class Queue(object):
                         os.unlink(self._fn(m_id, 'new'))
                         continue
                     else:
-                        os.write(fd, string)
+                        os.write(fd, data)
                         os.fsync(fd)
                         os.rename(self._fn(m_id, 'new'),
                                   self._fn(m_id))
@@ -120,7 +120,7 @@ class Queue(object):
                 # attempt to consume this message
                 try:
                     os.rename(self._fn(m_id), self._fn(m_id, str(expiration)))
-                except OSError, e:
+                except OSError as e:
                     # ENOENT means someone else got here first, just move to
                     # the next file
                     if e.errno != errno.ENOENT:
@@ -128,13 +128,13 @@ class Queue(object):
                 else:
                     fn = self._fn(m_id, str(expiration))
                     self._cache(m_id, fn)
-                    with open(fn) as f:
+                    with open(fn, 'rb') as f:
                         return m_id, f.read()
             elif m[1] <= now:
                 # re-queue stale consumed message
                 try:
                     os.rename(self._fn(m_id, str(m[1])), self._fn(m_id))
-                except OSError, e:
+                except OSError as e:
                     # ENOENT is fine, it indicates someone else got there first
                     if e.errno != errno.ENOENT:
                         raise
@@ -150,7 +150,7 @@ class Queue(object):
         """
         for _fn in os.listdir(self.path):
             try:
-                yield map(int, _fn.split('.', 1))
+                yield list(map(int, _fn.split('.', 1)))
             except ValueError:
                 # non vsqs files are ignored
                 pass
@@ -161,9 +161,9 @@ class Queue(object):
             return
         except KeyError:
             pass
-        except OSError, e:
+        except OSError as e:
             if e.errno != errno.ENOENT:
                 raise
-        map(os.unlink,
+        list(map(os.unlink,
             (os.path.join(self.path, fn) for fn in os.listdir(self.path)
-             if fn == str(m_id) or fn.startswith(str(m_id) + '.')))
+             if fn == str(m_id) or fn.startswith(str(m_id) + '.'))))

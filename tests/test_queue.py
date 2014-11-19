@@ -22,32 +22,34 @@ class QueueTest(TestCase):
         q = self.manager.get_queue('foo')
         queue.millis = lambda: 0
 
-        self.assertItemsEqual([], os.listdir(q.path))
+        self.assertListEqual([], os.listdir(q.path))
 
-        self.assertEqual('0', q.publish('foo'))
-        self.assertItemsEqual(['0'], os.listdir(q.path))
+        self.assertEqual('0', q.publish('foo'.encode('ascii')))
+        self.assertListEqual(['0'], os.listdir(q.path))
         with open(os.path.join(q.path, '0')) as f:
             self.assertEqual('foo', f.read())
 
         queue.millis = lambda: 1
-        self.assertEqual('1', q.publish('bar'))
+        self.assertEqual('1', q.publish('bar'.encode('ascii')))
         with open(os.path.join(q.path, '1')) as f:
             self.assertEqual('bar', f.read())
 
-        self.assertItemsEqual(['0', '1'], os.listdir(q.path))
+        self.assertSetEqual({'0', '1'}, set(os.listdir(q.path)))
 
     def test_receive(self):
         queue.millis = lambda: 0
         q = self.manager.get_queue('foo')
-        self.assertEqual('0', q.publish('foo'))
+        self.assertEqual('0', q.publish('foo'.encode('ascii')))
         queue.millis = lambda: 1
-        self.assertEqual('1', q.publish('bar'))
-        self.assertEqual(('0', 'foo'), q.receive(visibility_timeout=10))
-        self.assertEqual(('1', 'bar'), q.receive(visibility_timeout=10))
+        self.assertEqual('1', q.publish('bar'.encode('ascii')))
+        self.assertEqual(('0', 'foo'.encode('ascii')),
+                         q.receive(visibility_timeout=10))
+        self.assertEqual(('1', 'bar'.encode('ascii')),
+                         q.receive(visibility_timeout=10))
 
     def test_delete(self):
         q = self.manager.get_queue('foo')
-        m_id = q.publish('foo')
+        m_id = q.publish('foo'.encode('ascii'))
         q.delete(m_id)
         self.assertEqual((None, None),
                          q.receive(visibility_timeout=10, timeout=0.1))
@@ -55,14 +57,16 @@ class QueueTest(TestCase):
     def test_requeue(self):
         queue.millis = lambda: 0
         q = self.manager.get_queue('foo')
-        q.publish('foo')
-        self.assertEqual(('0', 'foo'), q.receive(visibility_timeout=1))
+        q.publish('foo'.encode('ascii'))
+        self.assertEqual(('0', 'foo'.encode('ascii')),
+                         q.receive(visibility_timeout=1))
 
         # pretend a second has passed:
         queue.millis = lambda: 1000
 
         # message should have been requeued:
-        self.assertEqual(('0', 'foo'), q.receive(visibility_timeout=1))
+        self.assertEqual(('0', 'foo'.encode('ascii')),
+                         q.receive(visibility_timeout=1))
 
     def test_notify(self):
         """Wake up receivers when a new message gets published."""
@@ -72,19 +76,20 @@ class QueueTest(TestCase):
         # have a 2nd thread publish a message while we're blocked waiting
         def run():
             time.sleep(.1)
-            q.publish('foo')
+            q.publish('foo'.encode('ascii'))
 
         t = threading.Thread(target=run)
         t.start()
-        self.assertEqual(('0', 'foo'), q.receive(visibility_timeout=1))
+        self.assertEqual(('0', 'foo'.encode('ascii')),
+                         q.receive(visibility_timeout=1))
         t.join()
 
     def test_size(self):
         q = self.manager.get_queue('foo')
         self.assertEqual(0, q.size())
-        q.publish('foo')
+        q.publish('foo'.encode('ascii'))
         self.assertEqual(1, q.size())
-        q.publish('foo')
+        q.publish('foo'.encode('ascii'))
         self.assertEqual(2, q.size())
         m_id, data = q.receive(visibility_timeout=10)
         self.assertEqual(2, q.size())
