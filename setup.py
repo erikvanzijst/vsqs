@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # Installs vsqs.
 
-import os, sys
+import os
+import sys
 from distutils.core import setup
+
 
 def long_description():
     """Get the long description from the README"""
@@ -19,6 +21,7 @@ setup(
         'Natural Language :: English',
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
         'Topic :: System :: Clustering',
         'Topic :: System :: Distributed Computing',
         'Topic :: System :: Filesystems',
@@ -32,5 +35,5 @@ setup(
     name='vsqs',
     packages=['vsqs'],
     url='https://github.com/erikvanzijst/vsqs',
-    version='0.1',
+    version='0.2',
 )
