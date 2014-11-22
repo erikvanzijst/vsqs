@@ -6,7 +6,7 @@ from collections import OrderedDict
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-millis = lambda: int(time.time() * 1000)
+micros = lambda: int(time.time() * 1000000)
 MAX_CACHE_SIZE = 256
 
 
@@ -71,7 +71,7 @@ class Queue(object):
     def publish(self, data):
         """Returns the message id that can be used to delete the message."""
         while True:
-            m_id = str(millis())
+            m_id = str(micros())
             try:
                 fd = os.open(self._fn(m_id, 'new'),
                              os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -97,8 +97,8 @@ class Queue(object):
                     os.close(fd)
 
     def receive(self, visibility_timeout=10, timeout=None):
-        now = millis()
-        remaining = lambda: (now + timeout * 1000) - millis()
+        now = micros()
+        remaining = lambda: (now + timeout * 1000000) - micros()
 
         while timeout is None or remaining() > 0:
             with self._cond:
@@ -106,15 +106,15 @@ class Queue(object):
                     visibility_timeout=visibility_timeout)
                 if m == (None, None):
                     self._cond.wait(None if timeout is None else
-                                   remaining() / 1000.0)
+                                    remaining() / 1000000.0)
                 else:
                     return m
         return None, None
 
     def _get_oldest_message(self, visibility_timeout=10):
         """Returns a tuple containing the message id and its payload."""
-        now = millis()
-        expiration = now + visibility_timeout * 1000
+        now = micros()
+        expiration = now + visibility_timeout * 1000000
         for m in sorted(self._list_messages(), key=lambda i: i[0]):
             m_id = str(m[0])
             if len(m) == 1:
@@ -165,6 +165,6 @@ class Queue(object):
         except OSError as e:
             if e.errno != errno.ENOENT:
                 raise
-        list(map(os.unlink,
-            (os.path.join(self.path, fn) for fn in os.listdir(self.path)
-             if fn == str(m_id) or fn.startswith(str(m_id) + '.'))))
+        for p in (os.path.join(self.path, fn) for fn in os.listdir(self.path)):
+            if p == str(m_id) or p.startswith(str(m_id) + '.'):
+                os.unlink(p)

@@ -16,11 +16,11 @@ class QueueTest(TestCase):
         self.manager.close()
         shutil.rmtree(self.path)
         # reset the clock:
-        queue.millis = lambda: int(time.time() * 1000)
+        queue.micros = lambda: int(time.time() * 1000000)
 
     def test_publish(self):
         q = self.manager.get_queue('foo')
-        queue.millis = lambda: 0
+        queue.micros = lambda: 0
 
         self.assertListEqual([], os.listdir(q.path))
 
@@ -29,7 +29,7 @@ class QueueTest(TestCase):
         with open(os.path.join(q.path, '0')) as f:
             self.assertEqual('foo', f.read())
 
-        queue.millis = lambda: 1
+        queue.micros = lambda: 1
         self.assertEqual('1', q.publish('bar'.encode('ascii')))
         with open(os.path.join(q.path, '1')) as f:
             self.assertEqual('bar', f.read())
@@ -37,10 +37,10 @@ class QueueTest(TestCase):
         self.assertSetEqual({'0', '1'}, set(os.listdir(q.path)))
 
     def test_receive(self):
-        queue.millis = lambda: 0
+        queue.micros = lambda: 0
         q = self.manager.get_queue('foo')
         self.assertEqual('0', q.publish('foo'.encode('ascii')))
-        queue.millis = lambda: 1
+        queue.micros = lambda: 1
         self.assertEqual('1', q.publish('bar'.encode('ascii')))
         self.assertEqual(('0', 'foo'.encode('ascii')),
                          q.receive(visibility_timeout=10))
@@ -55,14 +55,14 @@ class QueueTest(TestCase):
                          q.receive(visibility_timeout=10, timeout=0.1))
 
     def test_requeue(self):
-        queue.millis = lambda: 0
+        queue.micros = lambda: 0
         q = self.manager.get_queue('foo')
         q.publish('foo'.encode('ascii'))
         self.assertEqual(('0', 'foo'.encode('ascii')),
                          q.receive(visibility_timeout=1))
 
         # pretend a second has passed:
-        queue.millis = lambda: 1000
+        queue.micros = lambda: 1000000
 
         # message should have been requeued:
         self.assertEqual(('0', 'foo'.encode('ascii')),
@@ -71,7 +71,7 @@ class QueueTest(TestCase):
     def test_notify(self):
         """Wake up receivers when a new message gets published."""
         q = self.manager.get_queue('foo')
-        queue.millis = lambda: 0
+        queue.micros = lambda: 0
 
         # have a 2nd thread publish a message while we're blocked waiting
         def run():
