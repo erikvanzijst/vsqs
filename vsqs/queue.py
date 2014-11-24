@@ -10,14 +10,29 @@ micros = lambda: int(time.time() * 1000000)
 MAX_CACHE_SIZE = 256
 
 
+class QueueException(Exception):
+    """Base exception for all queue related issues."""
+
+
+class QueueFullException(QueueException):
+    """Raised by `publish` when a queue is at or beyond capacity."""
+
+
 class QueueManager(object):
+
     def __init__(self, path):
         self.path = path
         self.observer = Observer()
         self.observer.start()
 
-    def get_queue(self, name):
-        return Queue(self, os.path.join(self.path, name))
+    def get_queue(self, name, capacity=None):
+        """Returns the Queue object for the given name. The optional capacity
+        in number of messages ensures the publisher gets blocked when the queue
+        is full.
+
+        If capacity is `None`, no maximum size is enforced.
+        """
+        return Queue(self, os.path.join(self.path, name), capacity=capacity)
 
     def close(self):
         self.observer.stop()
@@ -33,7 +48,13 @@ class DirectoryWatcher(FileSystemEventHandler):
 
 
 class Queue(object):
-    def __init__(self, manager, path):
+    """Offers access to a queue directory on the file system."""
+
+    def __init__(self, manager, path, capacity=None):
+        """Do not create Queue instances directly. Instead, always use
+        `QueueManager.get_queue` to ensure the file system watchers are
+        properly initialized.
+        """
         try:
             os.makedirs(path)
         except OSError as e:
@@ -41,6 +62,7 @@ class Queue(object):
                 raise
         self.manager = manager
         self.path = path
+        self.capacity = capacity
         self._cond = threading.Condition()
         self._watch = manager.observer.schedule(
             DirectoryWatcher(self._cond), self.path)
@@ -68,8 +90,16 @@ class Queue(object):
         """
         return sum(1 for m in self._list_messages())
 
-    def publish(self, data):
-        """Returns the message id that can be used to delete the message."""
+    def publish(self, data, timeout=None):
+        """Returns the message id that can be used to delete the message.
+
+        The optional `timeout` parameter controls how long the method will
+        block if the queue has reached capacity. If `timeout` is `None` and
+        capacity is reached, this method will block until the queue is no
+        longer at capacity.
+        """
+        now = micros()
+        remaining = lambda: (now + timeout * 1000000) - micros()
         while True:
             m_id = str(micros())
             try:
@@ -81,20 +111,36 @@ class Queue(object):
                     continue
                 raise e
             else:
-                try:
-                    if any(_fn.startswith(m_id) and _fn != '%s.new' % m_id
-                           for _fn in os.listdir(self.path)):
-                        os.unlink(self._fn(m_id, 'new'))
-                        continue
-                    else:
-                        os.write(fd, data)
-                        os.fsync(fd)
-                        os.rename(self._fn(m_id, 'new'),
-                                  self._fn(m_id))
-                        self._cache(m_id, self._fn(m_id))
-                        return m_id
-                finally:
-                    os.close(fd)
+                with self._cond:
+                    try:
+                        msgs = list(self._list_messages())
+                        if (self.capacity is not None and
+                                    len(msgs) >= self.capacity):
+                            # we're full
+                            os.unlink(self._fn(m_id, 'new'))
+                            if timeout is None or remaining() > 0:
+                                # wait for a message to get consumed
+                                self._cond.wait(None if timeout is None else
+                                                remaining() / 1000000.0)
+                                continue
+                            else:
+                                # not willing to wait any longer
+                                raise QueueFullException(len(msgs))
+
+                        elif any(str(msg[0]) == m_id for msg in msgs):
+                            # someone else claimed this message id before us
+                            os.unlink(self._fn(m_id, 'new'))
+                            continue
+
+                        else:
+                            os.write(fd, data)
+                            os.fsync(fd)
+                            os.rename(self._fn(m_id, 'new'),
+                                      self._fn(m_id))
+                            self._cache(m_id, self._fn(m_id))
+                            return m_id
+                    finally:
+                        os.close(fd)
 
     def receive(self, visibility_timeout=10, timeout=None):
         now = micros()
@@ -151,7 +197,7 @@ class Queue(object):
         """
         for _fn in os.listdir(self.path):
             try:
-                yield list(map(int, _fn.split('.', 1)))
+                yield tuple(map(int, _fn.split('.', 1)))
             except ValueError:
                 # non vsqs files are ignored
                 pass
