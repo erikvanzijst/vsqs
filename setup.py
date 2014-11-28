@@ -34,6 +34,7 @@ setup(
     long_description=long_description(),
     name='vsqs',
     packages=['vsqs'],
+    scripts=['scripts/vsqspump', 'scripts/vsqssink'],
     url='https://github.com/erikvanzijst/vsqs',
     version='0.2',
 )
