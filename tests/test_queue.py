@@ -9,12 +9,10 @@ from vsqs import queue
 
 class QueueTest(TestCase):
     def setUp(self):
-        self.manager = queue.QueueManager()
-        self.q = self.manager.get_queue(tempfile.mkdtemp())
+        self.q = queue.Queue(tempfile.mkdtemp())
 
     def tearDown(self):
         self.q.close()
-        self.manager.close()
         shutil.rmtree(self.q.path)
         # reset the clock:
         queue.micros = lambda: int(time.time() * 1000000)

@@ -1,10 +1,8 @@
 import errno
 import os
-import threading
 import time
 from collections import OrderedDict
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
+from vsqs.fswatcher import FSWatcher
 
 micros = lambda: int(time.time() * 1000000)
 MAX_CACHE_SIZE = 256
@@ -18,38 +16,10 @@ class QueueFullException(QueueException):
     """Raised by `publish` when a queue is at or beyond capacity."""
 
 
-class QueueManager(object):
-
-    def __init__(self):
-        self.observer = Observer()
-        self.observer.start()
-
-    def get_queue(self, path, capacity=None):
-        """Returns the Queue object for the given path. The optional capacity
-        in number of messages ensures the publisher gets blocked when the queue
-        is full.
-
-        If capacity is `None`, no maximum size is enforced.
-        """
-        return Queue(self, path, capacity=capacity)
-
-    def close(self):
-        self.observer.stop()
-
-
-class DirectoryWatcher(FileSystemEventHandler):
-    def __init__(self, cond):
-        self.cond = cond
-
-    def on_any_event(self, event):
-        with self.cond:
-            self.cond.notifyAll()
-
-
 class Queue(object):
     """Offers access to a queue directory on the file system."""
 
-    def __init__(self, manager, path, capacity=None):
+    def __init__(self, path, capacity=None):
         """Do not create Queue instances directly. Instead, always use
         `QueueManager.get_queue` to ensure the file system watchers are
         properly initialized.
@@ -59,16 +29,13 @@ class Queue(object):
         except OSError as e:
             if e.errno != errno.EEXIST:
                 raise
-        self.manager = manager
         self.path = path
         self.capacity = capacity
-        self._cond = threading.Condition()
-        self._watch = manager.observer.schedule(
-            DirectoryWatcher(self._cond), self.path)
+        self._watcher = FSWatcher.watch(path)
         self._mid_cache = OrderedDict()
 
     def close(self):
-        self.manager.observer.unschedule(self._watch)
+        self._watcher.stop()
 
     def _fn(self, m_id, extension=None):
         base = os.path.join(self.path, m_id)
@@ -110,7 +77,7 @@ class Queue(object):
                     continue
                 raise e
             else:
-                with self._cond:
+                with self._watcher:
                     try:
                         msgs = list(self._list_messages())
                         if (self.capacity is not None and
@@ -119,8 +86,8 @@ class Queue(object):
                             os.unlink(self._fn(m_id, 'new'))
                             if timeout is None or remaining() > 0:
                                 # wait for a message to get consumed
-                                self._cond.wait(None if timeout is None else
-                                                remaining() / 1000000.0)
+                                self._watcher.wait(None if timeout is None else
+                                                   remaining() / 1000000.0)
                                 continue
                             else:
                                 # not willing to wait any longer
@@ -146,11 +113,11 @@ class Queue(object):
         remaining = lambda: (now + timeout * 1000000) - micros()
 
         while timeout is None or remaining() > 0:
-            with self._cond:
+            with self._watcher:
                 m = self._get_oldest_message(
                     visibility_timeout=visibility_timeout)
                 if m == (None, None):
-                    self._cond.wait(None if timeout is None else
+                    self._watcher.wait(None if timeout is None else
                                     remaining() / 1000000.0)
                 else:
                     return m
