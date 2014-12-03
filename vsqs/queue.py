@@ -20,19 +20,18 @@ class QueueFullException(QueueException):
 
 class QueueManager(object):
 
-    def __init__(self, path):
-        self.path = path
+    def __init__(self):
         self.observer = Observer()
         self.observer.start()
 
-    def get_queue(self, name, capacity=None):
-        """Returns the Queue object for the given name. The optional capacity
+    def get_queue(self, path, capacity=None):
+        """Returns the Queue object for the given path. The optional capacity
         in number of messages ensures the publisher gets blocked when the queue
         is full.
 
         If capacity is `None`, no maximum size is enforced.
         """
-        return Queue(self, os.path.join(self.path, name), capacity=capacity)
+        return Queue(self, path, capacity=capacity)
 
     def close(self):
         self.observer.stop()
